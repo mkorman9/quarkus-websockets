@@ -2,6 +2,7 @@ package com.github.mkorman9.websockets;
 
 import com.github.mkorman9.websockets.packets.client.ClientChatMessage;
 import com.github.mkorman9.websockets.packets.client.ClientJoinRequest;
+import com.github.mkorman9.websockets.packets.server.JoinConfirmationMessage;
 import com.github.mkorman9.websockets.packets.server.ServerChatMessage;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -12,9 +13,6 @@ import jakarta.websocket.Session;
 import jakarta.websocket.server.ServerEndpoint;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 @ServerEndpoint("/ws")
 @ApplicationScoped
 @Slf4j
@@ -23,22 +21,18 @@ public class ChatWebSocket {
     ClientPacketParser packetParser;
 
     @Inject
-    ServerPacketSender sender;
+    WebSocketClientStore store;
 
-    private final Map<String, Session> clients = new ConcurrentHashMap<>();
+    @Inject
+    ServerPacketSender sender;
 
     @OnOpen
     public void onOpen(Session session) {
-        log.info("websocket connected");
-
-        clients.put(session.getId(), session);
     }
 
     @OnClose
     public void onClose(Session session) {
-        log.info("websocket disconnected");
-
-        clients.remove(session.getId());
+        store.unregister(session);
     }
 
     @OnMessage
@@ -61,19 +55,37 @@ public class ChatWebSocket {
     }
 
     private void onJoinRequest(Session session, ClientJoinRequest joinRequest) {
-        log.info("join request: {}", joinRequest.username());
+        var client = store.register(session, joinRequest.username());
+        if (client == null) {
+            return;
+        }
+
+        sender.send(
+            session,
+            ServerPacketType.JOIN_CONFIRMATION,
+            JoinConfirmationMessage.builder()
+                .username(client.username())
+                .build()
+        );
+
+        log.info("join request: {}", client.username());
     }
 
     private void onChatMessage(Session session, ClientChatMessage chatMessage) {
-        log.info("chat message: {}", chatMessage.text());
+        var client = store.getClient(session);
+        if (client == null) {
+            return;
+        }
 
-        sender.broadcast(
-            clients.values(),
+        log.info("chat message: [{}] {}", client.username(), chatMessage.text());
+
+        store.getClients().forEach(c -> sender.send(
+            c.session(),
             ServerPacketType.CHAT_MESSAGE,
             ServerChatMessage.builder()
                 .authorId(session.getId())
                 .text(chatMessage.text())
-            .build()
-        );
+                .build()
+        ));
     }
 }

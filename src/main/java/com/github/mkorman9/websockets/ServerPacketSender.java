@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.websocket.Session;
 
 import java.io.IOException;
-import java.util.Collection;
 
 @ApplicationScoped
 public class ServerPacketSender {
@@ -33,13 +32,5 @@ public class ServerPacketSender {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    public void broadcast(Collection<Session> sessions, ServerPacketType type) {
-        sessions.forEach(s -> send(s, type));
-    }
-
-    public void broadcast(Collection<Session> sessions, ServerPacketType type, Object data) {
-        sessions.forEach(s -> send(s, type, data));
     }
 }
