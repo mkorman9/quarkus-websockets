@@ -12,7 +12,6 @@ import java.io.IOException;
 @Builder
 public record WebSocketClient(
     Session session,
-    boolean active,
     String username
 ) {
     private static final ObjectMapper objectMapper;

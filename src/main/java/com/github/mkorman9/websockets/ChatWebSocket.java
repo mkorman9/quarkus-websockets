@@ -70,14 +70,18 @@ public class ChatWebSocket {
     }
 
     private void onJoinRequest(Session session, ClientJoinRequest joinRequest) {
-        var client = store.register(session, joinRequest.username());
-        if (!client.active()) {
-            client.send(
+        var result = store.register(session, joinRequest.username());
+        if (!result.success()) {
+            result.client().send(
                 ServerPacketType.JOIN_REJECTION,
-                JoinRejection.builder().build()
+                JoinRejection.builder()
+                    .reason(result.reason())
+                    .build()
             );
             return;
         }
+
+        var client = result.client();
 
         client.send(
             ServerPacketType.JOIN_CONFIRMATION,

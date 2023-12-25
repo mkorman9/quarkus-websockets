@@ -11,21 +11,22 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebSocketClientStore {
     private final Map<String, WebSocketClient> clients = new ConcurrentHashMap<>();
 
-    public WebSocketClient register(Session session, String username) {
+    public RegisterResult register(Session session, String username) {
         var client = WebSocketClient.builder()
             .session(session)
-            .active(true)
             .username(username)
             .build();
 
-        if (clients.put(session.getId(), client) != null) {
-            return WebSocketClient.builder()
-                .session(session)
-                .active(false)
-                .build();
+        if (clients.values().stream().anyMatch(
+            c -> c.username().equals(username) && !c.session().getId().equals(session.getId())
+        )) {
+            return new RegisterResult(client, false, "duplicate_username");
+        }
+        if (clients.putIfAbsent(session.getId(), client) != null) {
+            return new RegisterResult(client, false, "already_joined");
         }
 
-        return client;
+        return new RegisterResult(client, true, null);
     }
 
     public void unregister(Session session) {
@@ -38,5 +39,12 @@ public class WebSocketClientStore {
 
     public Collection<WebSocketClient> getClients() {
         return clients.values();
+    }
+
+    public record RegisterResult(
+       WebSocketClient client,
+       boolean success,
+       String reason
+    ) {
     }
 }
