@@ -1,4 +1,4 @@
-package com.github.mkorman9.websockets;
+package com.github.mkorman9.websockets.packets;
 
 import com.github.mkorman9.websockets.packets.client.ClientChatMessage;
 import com.github.mkorman9.websockets.packets.client.ClientJoinRequest;

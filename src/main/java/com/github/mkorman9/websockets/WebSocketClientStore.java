@@ -14,11 +14,15 @@ public class WebSocketClientStore {
     public WebSocketClient register(Session session, String username) {
         var client = WebSocketClient.builder()
             .session(session)
+            .active(true)
             .username(username)
             .build();
 
         if (clients.put(session.getId(), client) != null) {
-            return null;
+            return WebSocketClient.builder()
+                .session(session)
+                .active(false)
+                .build();
         }
 
         return client;

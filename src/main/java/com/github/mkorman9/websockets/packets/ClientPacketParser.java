@@ -1,4 +1,4 @@
-package com.github.mkorman9.websockets;
+package com.github.mkorman9.websockets.packets;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,12 +20,12 @@ public class ClientPacketParser {
         try {
             var packet = objectMapper.readValue(data, RawClientPacket.class);
             if (packet.type() == null || packet.data() == null) {
-                throw new UnrecognizedPacketException();
+                throw new PacketParsingException();
             }
 
             var payload = objectMapper.convertValue(packet.data(), packet.type().getPayload());
             if (!validator.validate(payload).isEmpty()) {
-                throw new PacketDataValidationException();
+                throw new PacketParsingException();
             }
 
             return ClientPacket.builder()
@@ -33,7 +33,7 @@ public class ClientPacketParser {
                 .data(payload)
                 .build();
         } catch (JsonProcessingException | IllegalArgumentException e) {
-            throw new UnrecognizedPacketException();
+            throw new PacketParsingException();
         }
     }
 
@@ -43,9 +43,6 @@ public class ClientPacketParser {
     ) {
     }
 
-    public static class UnrecognizedPacketException extends RuntimeException {
-    }
-
-    public static class PacketDataValidationException extends RuntimeException {
+    public static class PacketParsingException extends RuntimeException {
     }
 }

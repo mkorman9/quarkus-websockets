@@ -1,9 +1,15 @@
 package com.github.mkorman9.websockets;
 
+import com.github.mkorman9.websockets.packets.ClientPacket;
+import com.github.mkorman9.websockets.packets.ClientPacketParser;
+import com.github.mkorman9.websockets.packets.ServerPacketType;
 import com.github.mkorman9.websockets.packets.client.ClientChatMessage;
 import com.github.mkorman9.websockets.packets.client.ClientJoinRequest;
-import com.github.mkorman9.websockets.packets.server.JoinConfirmationMessage;
+import com.github.mkorman9.websockets.packets.server.JoinConfirmation;
+import com.github.mkorman9.websockets.packets.server.JoinRejection;
 import com.github.mkorman9.websockets.packets.server.ServerChatMessage;
+import com.github.mkorman9.websockets.packets.server.UserJoined;
+import com.github.mkorman9.websockets.packets.server.UserLeft;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.websocket.OnClose;
@@ -23,15 +29,26 @@ public class ChatWebSocket {
     @Inject
     WebSocketClientStore store;
 
-    @Inject
-    ServerPacketSender sender;
-
     @OnOpen
     public void onOpen(Session session) {
     }
 
     @OnClose
     public void onClose(Session session) {
+        var client = store.getClient(session);
+        if (client != null) {
+            store.getClients().stream()
+                .filter(c -> !c.session().getId().equals(session.getId()))
+                .forEach(c -> c.send(
+                    ServerPacketType.USER_LEFT,
+                    UserLeft.builder()
+                        .username(client.username())
+                        .build()
+                ));
+
+            log.info("{} left", client.username());
+        }
+
         store.unregister(session);
     }
 
@@ -40,10 +57,8 @@ public class ChatWebSocket {
         try {
             var packet = packetParser.parse(data);
             onPacket(session, packet);
-        } catch (ClientPacketParser.UnrecognizedPacketException e) {
+        } catch (ClientPacketParser.PacketParsingException e) {
             // ignore packet
-        } catch (ClientPacketParser.PacketDataValidationException e) {
-            sender.send(session, ServerPacketType.PACKET_VALIDATION_ERROR);
         }
     }
 
@@ -56,19 +71,31 @@ public class ChatWebSocket {
 
     private void onJoinRequest(Session session, ClientJoinRequest joinRequest) {
         var client = store.register(session, joinRequest.username());
-        if (client == null) {
+        if (!client.active()) {
+            client.send(
+                ServerPacketType.JOIN_REJECTION,
+                JoinRejection.builder().build()
+            );
             return;
         }
 
-        sender.send(
-            session,
+        client.send(
             ServerPacketType.JOIN_CONFIRMATION,
-            JoinConfirmationMessage.builder()
+            JoinConfirmation.builder()
                 .username(client.username())
                 .build()
         );
 
-        log.info("join request: {}", client.username());
+        store.getClients().stream()
+            .filter(c -> !c.session().getId().equals(session.getId()))
+            .forEach(c -> c.send(
+                ServerPacketType.USER_JOINED,
+                UserJoined.builder()
+                    .username(client.username())
+                    .build()
+            ));
+
+        log.info("{} joined", client.username());
     }
 
     private void onChatMessage(Session session, ClientChatMessage chatMessage) {
@@ -77,13 +104,12 @@ public class ChatWebSocket {
             return;
         }
 
-        log.info("chat message: [{}] {}", client.username(), chatMessage.text());
+        log.info("[{}] {}", client.username(), chatMessage.text());
 
-        store.getClients().forEach(c -> sender.send(
-            c.session(),
+        store.getClients().forEach(c -> c.send(
             ServerPacketType.CHAT_MESSAGE,
             ServerChatMessage.builder()
-                .authorId(session.getId())
+                .username(client.username())
                 .text(chatMessage.text())
                 .build()
         ));

@@ -1,4 +1,4 @@
-package com.github.mkorman9.websockets;
+package com.github.mkorman9.websockets.packets;
 
 import lombok.Builder;
 
