@@ -5,6 +5,7 @@ import com.github.mkorman9.websockets.packets.ClientPacketParser;
 import com.github.mkorman9.websockets.packets.ServerPacketType;
 import com.github.mkorman9.websockets.packets.client.ClientChatMessage;
 import com.github.mkorman9.websockets.packets.client.ClientJoinRequest;
+import com.github.mkorman9.websockets.packets.client.ClientLeaveRequest;
 import com.github.mkorman9.websockets.packets.server.JoinConfirmation;
 import com.github.mkorman9.websockets.packets.server.JoinRejection;
 import com.github.mkorman9.websockets.packets.server.ServerChatMessage;
@@ -12,6 +13,7 @@ import com.github.mkorman9.websockets.packets.server.UserJoined;
 import com.github.mkorman9.websockets.packets.server.UserLeft;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.websocket.CloseReason;
 import jakarta.websocket.OnClose;
 import jakarta.websocket.OnMessage;
 import jakarta.websocket.OnOpen;
@@ -19,10 +21,14 @@ import jakarta.websocket.Session;
 import jakarta.websocket.server.ServerEndpoint;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
+
 @ServerEndpoint("/ws")
 @ApplicationScoped
 @Slf4j
 public class ChatWebSocket {
+    private static final String LEAVING_REASON = "leaving";
+
     @Inject
     ClientPacketParser packetParser;
 
@@ -34,7 +40,7 @@ public class ChatWebSocket {
     }
 
     @OnClose
-    public void onClose(Session session) {
+    public void onClose(Session session, CloseReason reason) {
         var client = store.getClient(session);
         if (client != null) {
             store.getClients().stream()
@@ -46,7 +52,11 @@ public class ChatWebSocket {
                         .build()
                 ));
 
-            log.info("{} left", client.username());
+            if (reason.getReasonPhrase().equals(LEAVING_REASON)) {
+                log.info("{} left", client.username());
+            } else {
+                log.info("{} timed out", client.username());
+            }
         }
 
         store.unregister(session);
@@ -65,6 +75,7 @@ public class ChatWebSocket {
     private void onPacket(Session session, ClientPacket packet) {
         switch (packet.type()) {
             case JOIN_REQUEST -> onJoinRequest(session, (ClientJoinRequest) packet.data());
+            case LEAVE_REQUEST -> onLeaveRequest(session, (ClientLeaveRequest) packet.data());
             case CHAT_MESSAGE -> onChatMessage(session, (ClientChatMessage) packet.data());
         }
     }
@@ -100,6 +111,14 @@ public class ChatWebSocket {
             ));
 
         log.info("{} joined", client.username());
+    }
+
+    private void onLeaveRequest(Session session, ClientLeaveRequest request) {
+        try {
+            session.close(new CloseReason(CloseReason.CloseCodes.NORMAL_CLOSURE, LEAVING_REASON));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void onChatMessage(Session session, ClientChatMessage chatMessage) {
