@@ -92,6 +92,12 @@ public class ChatWebSocket {
             "JOIN_CONFIRMATION",
             JsonObject.of()
                 .put("username", client.username())
+                .put("users", store.getClients().stream()
+                    .map(c -> JsonObject.of()
+                        .put("username", c.username())
+                    )
+                    .toList()
+                )
         );
 
         store.getClients().stream()
