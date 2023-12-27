@@ -1,4 +1,4 @@
-package com.github.mkorman9.websockets.packets;
+package com.github.mkorman9.websockets.protocol;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,14 +9,14 @@ import jakarta.validation.Validator;
 import java.util.Map;
 
 @ApplicationScoped
-public class ClientPacketParser {
+public class PacketParser {
     @Inject
     ObjectMapper objectMapper;
 
     @Inject
     Validator validator;
 
-    public ClientPacket parse(String data) {
+    public Packet parse(String data) {
         try {
             var packet = objectMapper.readValue(data, RawClientPacket.class);
             if (packet.type() == null || packet.data() == null) {
@@ -28,7 +28,7 @@ public class ClientPacketParser {
                 throw new PacketParsingException();
             }
 
-            return ClientPacket.builder()
+            return Packet.builder()
                 .type(packet.type())
                 .data(payload)
                 .build();
@@ -38,7 +38,7 @@ public class ClientPacketParser {
     }
 
     public record RawClientPacket(
-        ClientPacketType type,
+        PacketType type,
         Map<String, Object> data
     ) {
     }

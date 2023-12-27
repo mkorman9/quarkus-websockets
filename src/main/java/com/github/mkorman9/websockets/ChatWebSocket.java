@@ -1,16 +1,11 @@
 package com.github.mkorman9.websockets;
 
-import com.github.mkorman9.websockets.packets.ClientPacket;
-import com.github.mkorman9.websockets.packets.ClientPacketParser;
-import com.github.mkorman9.websockets.packets.ServerPacketType;
-import com.github.mkorman9.websockets.packets.client.ClientChatMessage;
-import com.github.mkorman9.websockets.packets.client.ClientJoinRequest;
-import com.github.mkorman9.websockets.packets.client.ClientLeaveRequest;
-import com.github.mkorman9.websockets.packets.server.JoinConfirmation;
-import com.github.mkorman9.websockets.packets.server.JoinRejection;
-import com.github.mkorman9.websockets.packets.server.ServerChatMessage;
-import com.github.mkorman9.websockets.packets.server.UserJoined;
-import com.github.mkorman9.websockets.packets.server.UserLeft;
+import com.github.mkorman9.websockets.protocol.Packet;
+import com.github.mkorman9.websockets.protocol.PacketParser;
+import com.github.mkorman9.websockets.protocol.packets.ChatMessage;
+import com.github.mkorman9.websockets.protocol.packets.JoinRequest;
+import com.github.mkorman9.websockets.protocol.packets.LeaveRequest;
+import io.vertx.core.json.JsonObject;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.websocket.CloseReason;
@@ -30,7 +25,7 @@ public class ChatWebSocket {
     private static final String LEAVING_REASON = "leaving";
 
     @Inject
-    ClientPacketParser packetParser;
+    PacketParser packetParser;
 
     @Inject
     WebSocketClientStore store;
@@ -46,10 +41,9 @@ public class ChatWebSocket {
             store.getClients().stream()
                 .filter(c -> !c.session().getId().equals(session.getId()))
                 .forEach(c -> c.send(
-                    ServerPacketType.USER_LEFT,
-                    UserLeft.builder()
-                        .username(client.username())
-                        .build()
+                    "USER_LEFT",
+                    JsonObject.of()
+                        .put("username", client.username())
                 ));
 
             if (reason.getReasonPhrase().equals(LEAVING_REASON)) {
@@ -67,54 +61,51 @@ public class ChatWebSocket {
         try {
             var packet = packetParser.parse(data);
             onPacket(session, packet);
-        } catch (ClientPacketParser.PacketParsingException e) {
+        } catch (PacketParser.PacketParsingException e) {
             // ignore packet
         }
     }
 
-    private void onPacket(Session session, ClientPacket packet) {
+    private void onPacket(Session session, Packet packet) {
         switch (packet.type()) {
-            case JOIN_REQUEST -> onJoinRequest(session, (ClientJoinRequest) packet.data());
-            case LEAVE_REQUEST -> onLeaveRequest(session, (ClientLeaveRequest) packet.data());
-            case CHAT_MESSAGE -> onChatMessage(session, (ClientChatMessage) packet.data());
+            case JOIN_REQUEST -> onJoinRequest(session, (JoinRequest) packet.data());
+            case LEAVE_REQUEST -> onLeaveRequest(session, (LeaveRequest) packet.data());
+            case CHAT_MESSAGE -> onChatMessage(session, (ChatMessage) packet.data());
         }
     }
 
-    private void onJoinRequest(Session session, ClientJoinRequest joinRequest) {
+    private void onJoinRequest(Session session, JoinRequest joinRequest) {
         WebSocketClient client;
         try {
             client = store.register(session, joinRequest.username());
         } catch (WebSocketClientStore.RegisterException e) {
             WebSocketClient.send(
                 session,
-                ServerPacketType.JOIN_REJECTION,
-                JoinRejection.builder()
-                    .reason(e.getReason())
-                    .build()
+                "JOIN_REJECTION",
+                JsonObject.of()
+                    .put("reason", e.getReason())
             );
             return;
         }
 
         client.send(
-            ServerPacketType.JOIN_CONFIRMATION,
-            JoinConfirmation.builder()
-                .username(client.username())
-                .build()
+            "JOIN_CONFIRMATION",
+            JsonObject.of()
+                .put("username", client.username())
         );
 
         store.getClients().stream()
             .filter(c -> !c.session().getId().equals(session.getId()))
             .forEach(c -> c.send(
-                ServerPacketType.USER_JOINED,
-                UserJoined.builder()
-                    .username(client.username())
-                    .build()
+                "USER_JOINED",
+                JsonObject.of()
+                    .put("username", client.username())
             ));
 
         log.info("{} joined", client.username());
     }
 
-    private void onLeaveRequest(Session session, ClientLeaveRequest request) {
+    private void onLeaveRequest(Session session, LeaveRequest request) {
         try {
             session.close(new CloseReason(CloseReason.CloseCodes.NORMAL_CLOSURE, LEAVING_REASON));
         } catch (IOException e) {
@@ -122,7 +113,7 @@ public class ChatWebSocket {
         }
     }
 
-    private void onChatMessage(Session session, ClientChatMessage chatMessage) {
+    private void onChatMessage(Session session, ChatMessage chatMessage) {
         var client = store.getClient(session);
         if (client == null) {
             return;
@@ -131,11 +122,10 @@ public class ChatWebSocket {
         log.info("[{}] {}", client.username(), chatMessage.text());
 
         store.getClients().forEach(c -> c.send(
-            ServerPacketType.CHAT_MESSAGE,
-            ServerChatMessage.builder()
-                .username(client.username())
-                .text(chatMessage.text())
-                .build()
+            "CHAT_MESSAGE",
+            JsonObject.of()
+                .put("username", client.username())
+                .put("text", chatMessage.text())
         ));
     }
 }
