@@ -82,8 +82,9 @@ public class ChatWebSocket {
 
     private void onJoinRequest(Session session, ClientJoinRequest joinRequest) {
         var result = store.register(session, joinRequest.username());
-        if (!result.success()) {
-            result.client().send(
+        if (result.client() == null) {
+            WebSocketClient.send(
+                session,
                 ServerPacketType.JOIN_REJECTION,
                 JoinRejection.builder()
                     .reason(result.reason())

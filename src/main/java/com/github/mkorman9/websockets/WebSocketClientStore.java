@@ -20,13 +20,13 @@ public class WebSocketClientStore {
         if (clients.values().stream().anyMatch(
             c -> c.username().equals(username) && !c.session().getId().equals(session.getId())
         )) {
-            return new RegisterResult(client, false, "duplicate_username");
+            return new RegisterResult(null, "duplicate_username");
         }
         if (clients.putIfAbsent(session.getId(), client) != null) {
-            return new RegisterResult(client, false, "already_joined");
+            return new RegisterResult(null, "already_joined");
         }
 
-        return new RegisterResult(client, true, null);
+        return new RegisterResult(client, null);
     }
 
     public void unregister(Session session) {
@@ -43,7 +43,6 @@ public class WebSocketClientStore {
 
     public record RegisterResult(
        WebSocketClient client,
-       boolean success,
        String reason
     ) {
     }

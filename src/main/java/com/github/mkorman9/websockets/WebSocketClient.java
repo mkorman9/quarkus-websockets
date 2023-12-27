@@ -21,7 +21,7 @@ public record WebSocketClient(
         objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
     }
 
-    public void send(ServerPacketType type, Object data) {
+    public static void send(Session session, ServerPacketType type, Object data) {
         var packet = ServerPacket.builder()
             .type(type)
             .data(data)
@@ -33,5 +33,9 @@ public record WebSocketClient(
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void send(ServerPacketType type, Object data) {
+        send(session, type, data);
     }
 }
