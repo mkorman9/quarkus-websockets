@@ -81,19 +81,19 @@ public class ChatWebSocket {
     }
 
     private void onJoinRequest(Session session, ClientJoinRequest joinRequest) {
-        var result = store.register(session, joinRequest.username());
-        if (result.client() == null) {
+        WebSocketClient client;
+        try {
+            client = store.register(session, joinRequest.username());
+        } catch (WebSocketClientStore.RegisterException e) {
             WebSocketClient.send(
                 session,
                 ServerPacketType.JOIN_REJECTION,
                 JoinRejection.builder()
-                    .reason(result.reason())
+                    .reason(e.getReason())
                     .build()
             );
             return;
         }
-
-        var client = result.client();
 
         client.send(
             ServerPacketType.JOIN_CONFIRMATION,

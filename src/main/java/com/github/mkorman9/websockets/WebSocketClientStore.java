@@ -2,6 +2,7 @@ package com.github.mkorman9.websockets;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.websocket.Session;
+import lombok.Getter;
 
 import java.util.Collection;
 import java.util.Map;
@@ -11,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebSocketClientStore {
     private final Map<String, WebSocketClient> clients = new ConcurrentHashMap<>();
 
-    public RegisterResult register(Session session, String username) {
+    public WebSocketClient register(Session session, String username) {
         var client = WebSocketClient.builder()
             .session(session)
             .username(username)
@@ -20,13 +21,13 @@ public class WebSocketClientStore {
         if (clients.values().stream().anyMatch(
             c -> c.username().equals(username) && !c.session().getId().equals(session.getId())
         )) {
-            return new RegisterResult(null, "duplicate_username");
+            throw new RegisterException("duplicate_username");
         }
         if (clients.putIfAbsent(session.getId(), client) != null) {
-            return new RegisterResult(null, "already_joined");
+            throw new RegisterException("already_joined");
         }
 
-        return new RegisterResult(client, null);
+        return client;
     }
 
     public void unregister(Session session) {
@@ -41,9 +42,12 @@ public class WebSocketClientStore {
         return clients.values();
     }
 
-    public record RegisterResult(
-       WebSocketClient client,
-       String reason
-    ) {
+    @Getter
+    public static class RegisterException extends RuntimeException {
+        private final String reason;
+
+        public RegisterException(String reason) {
+            this.reason = reason;
+        }
     }
 }
