@@ -18,7 +18,7 @@ public class PacketParser {
 
     public Packet parse(String data) {
         try {
-            var packet = objectMapper.readValue(data, RawClientPacket.class);
+            var packet = objectMapper.readValue(data, RawPacket.class);
             if (packet.type() == null || packet.data() == null) {
                 throw new PacketParsingException();
             }
@@ -37,7 +37,7 @@ public class PacketParser {
         }
     }
 
-    public record RawClientPacket(
+    public record RawPacket(
         PacketType type,
         Map<String, Object> data
     ) {
